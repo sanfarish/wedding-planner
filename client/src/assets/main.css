@@ -1,0 +1,95 @@
+:root {
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+}
+
+html {
+  overflow-y: auto;
+}
+
+body,
+.v-application {
+  font-family: var(--font-body);
+}
+
+.v-application .text-h1,
+.v-application .text-h2,
+.v-application .text-h3,
+.v-application .text-h4,
+.v-application .text-h5,
+.font-heading {
+  font-family: var(--font-heading) !important;
+  letter-spacing: 0.01em !important;
+}
+
+.v-application .text-h4,
+.v-application .text-h5 {
+  font-weight: 600 !important;
+}
+
+.v-btn {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+}
+
+.v-card {
+  border-color: rgba(59, 51, 48, 0.08) !important;
+  box-shadow: 0 1px 2px rgba(59, 51, 48, 0.04), 0 4px 16px rgba(59, 51, 48, 0.04) !important;
+}
+
+.v-card--hover:hover,
+.clickable-card:hover {
+  box-shadow: 0 2px 4px rgba(59, 51, 48, 0.06), 0 8px 24px rgba(59, 51, 48, 0.08) !important;
+}
+
+.clickable-card {
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.overdue td:first-child,
+.v-card.overdue {
+  box-shadow: inset 3px 0 0 rgb(var(--v-theme-error)) !important;
+}
+
+.completed-row .task-title {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.v-data-table tbody tr {
+  cursor: pointer;
+}
+
+.v-data-table th {
+  font-weight: 600 !important;
+  color: rgba(59, 51, 48, 0.7);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-3 {
+  gap: 12px;
+}
+
+/* Respect safe area on phones with home indicators */
+.v-bottom-navigation {
+  padding-bottom: env(safe-area-inset-bottom);
+}
