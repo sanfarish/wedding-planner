@@ -1,0 +1,13 @@
+{
+  "name": "@wedding/shared",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Type-only definitions shared by client and server",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts"
+    }
+  }
+}
