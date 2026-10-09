@@ -63,7 +63,9 @@ async function complete(task: Task): Promise<void> {
           </div>
           <template v-if="countdown">
             <div class="countdown-number font-heading text-primary">{{ countdown.big }}</div>
-            <div class="text-h6 text-uppercase font-weight-medium" style="letter-spacing: 0.15em">{{ countdown.small }}</div>
+            <div class="text-subtitle-1 text-uppercase font-weight-medium mt-2" style="letter-spacing: 0.2em">
+              {{ countdown.small }}
+            </div>
             <div class="text-body-1 text-medium-emphasis mt-3">
               {{ formatLongDate(d.wedding.weddingDate) }}
               <span v-if="d.wedding.weddingLocation"> · {{ d.wedding.weddingLocation }}</span>
@@ -154,6 +156,7 @@ async function complete(task: Task): Promise<void> {
                 <v-list-item
                   v-for="task in d.tasks.upcoming"
                   :key="task.id"
+                  :value="task.id"
                   class="px-1"
                   :class="{ overdue: isOverdue(task.dueDate, false) }"
                   :to="{ name: 'tasks' }"

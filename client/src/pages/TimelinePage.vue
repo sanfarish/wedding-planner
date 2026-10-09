@@ -93,7 +93,7 @@ const todayStr = today()
       />
       <div v-for="month in months" :key="month.key" class="mb-6">
         <div class="text-h5 font-heading mb-2">{{ month.label }}</div>
-        <v-timeline side="end" density="compact" align="start" truncate-line="both" line-color="surface-variant">
+        <v-timeline side="end" density="compact" align="start" truncate-line="both" line-color="surface-variant" class="planning-timeline">
           <template v-for="item in month.items" :key="item.kind === 'event' ? item.event.id : 'wedding'">
             <v-timeline-item v-if="item.kind === 'wedding'" dot-color="primary" icon="mdi-heart" size="small">
               <div class="py-1">
@@ -109,7 +109,7 @@ const todayStr = today()
               <v-card
                 class="clickable-card"
                 :class="{ 'opacity-60': item.event.eventDate < todayStr }"
-                min-width="240"
+                width="100%"
                 @click="openEdit(item.event)"
               >
                 <v-card-text class="py-3">

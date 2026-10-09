@@ -12,25 +12,24 @@ body,
   font-family: var(--font-body);
 }
 
-.v-application .text-h1,
-.v-application .text-h2,
-.v-application .text-h3,
-.v-application .text-h4,
-.v-application .text-h5,
-.font-heading {
+/* Serif headings only where explicitly requested; numbers stay in the body font. */
+.v-application .font-heading {
   font-family: var(--font-heading) !important;
-  letter-spacing: 0.01em !important;
-}
-
-.v-application .text-h4,
-.v-application .text-h5 {
   font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  font-variant-numeric: lining-nums;
 }
 
-.v-btn {
-  text-transform: none;
-  letter-spacing: 0.01em;
+/* Vuetify loads component CSS lazily, so these need !important to win. */
+.v-btn,
+.v-tab {
+  text-transform: none !important;
+  letter-spacing: 0.01em !important;
   font-weight: 500;
+}
+
+.v-application .text-overline {
+  text-transform: uppercase;
 }
 
 .v-card {
@@ -92,4 +91,9 @@ body,
 /* Respect safe area on phones with home indicators */
 .v-bottom-navigation {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.planning-timeline .v-timeline-item__body {
+  width: 100%;
+  max-width: 640px;
 }
