@@ -16,11 +16,12 @@ It runs on one small Ubuntu VPS. It has no public sign-up; exactly two accounts 
 8. [Building for production](#building-for-production)
 9. [Running in production](#running-in-production)
 10. [Backups](#backups)
-11. [Deployment to the VPS](#deployment-to-the-vps)
-12. [Nginx](#nginx)
-13. [PM2](#pm2)
-14. [Project structure](#project-structure)
-15. [Production checklist](#production-checklist)
+11. [Deploy with Podman (recommended)](#deploy-with-podman-recommended)
+12. [Alternative: Node + PM2](#alternative-node--pm2)
+13. [Nginx (Node + PM2)](#nginx-node--pm2)
+14. [PM2](#pm2)
+15. [Project structure](#project-structure)
+16. [Production checklist](#production-checklist)
 
 ---
 
@@ -32,7 +33,7 @@ It runs on one small Ubuntu VPS. It has no public sign-up; exactly two accounts 
 | Backend | Node.js, Express 5, TypeScript, Zod validation |
 | Database | SQLite via `better-sqlite3` (WAL mode, foreign keys on) |
 | Auth | Argon2id password hashes and server-side sessions stored in SQLite, sent as an HTTP-only cookie |
-| Infra | Nginx (TLS, static files, `/api` proxy), PM2, cron backups |
+| Infra | Nginx (TLS), a rootless Podman container run by systemd (or Node + PM2), cron backups |
 
 ```text
 Browser ──HTTPS──► Nginx ──► client/dist (static Vue app)
@@ -48,7 +49,7 @@ Two versions are deliberately pinned in the root `package.json` `overrides`:
 
 - Node.js **20.19+** (22 or 24 LTS recommended) and npm 10+.
 - No C/C++ build tools needed: `better-sqlite3` and `argon2` ship prebuilt binaries for Linux, macOS and Windows.
-- For production: Ubuntu with Nginx, Certbot and PM2 (`npm i -g pm2`).
+- For production: Ubuntu with Nginx and Certbot, plus either **Podman 3.4+** (the image is built by GitHub Actions) or Node + PM2.
 
 ## Installation
 
@@ -74,6 +75,12 @@ They live in the root `.env` file. Never commit `.env`; it is in `.gitignore`.
 | `UPLOAD_DIR` | `./uploads` | Reserved for future file uploads |
 | `SESSION_SECRET` | none | **Required in production**: at least 32 random characters. The server refuses to start without one |
 | `TZ` | `Asia/Jakarta` | Used for the countdown and "overdue" dates |
+| `SERVE_CLIENT` | `false` | Express also serves the built Vue app (on in the container image) |
+| `CLIENT_DIST` | `../client/dist` | Built client location, relative to `server/` |
+| `MIGRATE_ON_START` | on, except in production | Apply pending migrations when the server starts (on in the container image) |
+| `TRUST_PROXY` | `loopback` | Which proxies to trust for client IP and HTTPS. The container uses `1` (exactly one hop: Nginx) |
+
+The container image sets `NODE_ENV`, `HOST`, `PORT`, `DATABASE_PATH`, `SERVE_CLIENT`, `MIGRATE_ON_START` and `TRUST_PROXY` itself. On the VPS its `.env` only needs `SESSION_SECRET` (see `deploy/podman/wedding.env.example`).
 
 To generate a session secret:
 
@@ -90,7 +97,7 @@ npm run db:migrate                     # development (or anywhere dev deps are i
 node server/dist/scripts/migrate.js    # production, after `npm run build`
 ```
 
-The development server also applies pending migrations on startup. Production does not: always run the migrate command after deploying a new version.
+The development server and the container apply pending migrations on startup (`MIGRATE_ON_START`). A plain Node production install does not: run the migrate command after deploying a new version.
 
 To change the schema, add a new numbered file (e.g. `002_add_seating.sql`). Never edit a migration that has already run in production.
 
@@ -165,7 +172,13 @@ crontab -e
 
 For a one-off backup: `node server/dist/scripts/backup.js [output-file]`.
 
-**Restore:**
+**With Podman**, the snapshot is taken inside the container. Point the script at the container and its data folder; no sudo is needed:
+
+```bash
+30 2 * * * CONTAINER=wedding DATA_DIR=$HOME/wedding/data BACKUP_DIR=$HOME/wedding/backups RCLONE_REMOTE="gdrive:wedding-backups" $HOME/wedding-planner/scripts/backup-db.sh >> $HOME/wedding/backup.log 2>&1
+```
+
+**Restore (Node + PM2):**
 
 ```bash
 pm2 stop wedding-planner
@@ -174,7 +187,118 @@ rm -f server/data/wedding.db-wal server/data/wedding.db-shm
 pm2 start wedding-planner
 ```
 
-## Deployment to the VPS
+**Restore (Podman):**
+
+```bash
+systemctl --user stop container-wedding
+gunzip -c ~/wedding/backups/daily/wedding-YYYYMMDD-HHMMSS.db.gz > ~/wedding/data/wedding.db
+rm -f ~/wedding/data/wedding.db-wal ~/wedding/data/wedding.db-shm
+systemctl --user start container-wedding
+```
+
+## Deploy with Podman (recommended)
+
+GitHub Actions tests every push to `main` and publishes the image to `ghcr.io/sanfarish/wedding-planner` (`.github/workflows/container.yml`). The VPS never builds anything: it pulls the image and runs it as a **rootless** container for your normal user, kept alive by a systemd user service. These steps work with Podman **3.4.2** on Ubuntu 20.04.
+
+```text
+Browser ──HTTPS──► Nginx (host) ──► 127.0.0.1:3000 ──► container "wedding" (Vue app + API)
+                                                         └── ~/wedding/data/wedding.db (host folder)
+```
+
+**Notes specific to Podman 3.4:**
+
+- Quadlet isn't available, so `run.sh` uses `podman generate systemd --new`.
+- Rootless port forwarding hides Nginx's loopback address, so the image sets `TRUST_PROXY=1`, and the Nginx config overwrites `X-Forwarded-For` so clients can't fake their IP.
+- The image is published without attestation manifests, which old Podman can't read.
+
+**1. Make the image public (once).** After the first workflow run, open GitHub → your profile → **Packages** → `wedding-planner` → **Package settings** → **Change visibility** → **Public**.
+
+To keep it private instead, run `podman login ghcr.io` on the VPS with a personal access token that has `read:packages`.
+
+**2. Point DNS.** Add an A record `wedding` → your VPS IP, and check it with `dig +short wedding.sanfarish.com`.
+
+**3. Prepare the VPS.** Log in over SSH as your user, not via `su`/`sudo -i`, because rootless systemd needs a real login session.
+
+```bash
+uname -m                                   # must be x86_64 (the image is linux/amd64)
+podman --version                           # 3.4.x or newer
+sudo loginctl enable-linger "$USER"        # start your containers at boot without logging in
+sudo ss -ltnp | grep ':3000'               # no output = port 3000 is free (else set HOST_PORT below)
+
+git clone https://github.com/sanfarish/wedding-planner.git ~/wedding-planner   # only for deploy/ and scripts/
+mkdir -p ~/wedding
+cp ~/wedding-planner/deploy/podman/wedding.env.example ~/wedding/.env
+sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -base64 48 | tr -d '\n')|" ~/wedding/.env
+chmod 600 ~/wedding/.env
+```
+
+**4. Start the container.**
+
+```bash
+~/wedding-planner/deploy/podman/run.sh          # or: HOST_PORT=3100 ~/wedding-planner/deploy/podman/run.sh
+```
+
+It pulls the image, starts it on `127.0.0.1:3000` with `~/wedding/data` mounted for the database, waits until it's healthy, and installs and enables the `container-wedding` user service. You can re-run it any time.
+
+**5. Create your two accounts** (first time only):
+
+```bash
+podman exec -it wedding node server/dist/scripts/create-user.js    # you
+podman exec -it wedding node server/dist/scripts/create-user.js    # your partner
+```
+
+**6. HTTPS and Nginx.** The container serves the Vue app and the API, so Nginx only proxies:
+
+```bash
+sudo certbot certonly --nginx -d wedding.sanfarish.com
+sudo cp ~/wedding-planner/deploy/nginx/wedding.sanfarish.com.podman.conf /etc/nginx/sites-available/wedding.sanfarish.com.conf
+sudo ln -s /etc/nginx/sites-available/wedding.sanfarish.com.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+If you used another `HOST_PORT`, change `proxy_pass` to match. Then open **https://wedding.sanfarish.com**.
+
+**7. Firewall.** If `sudo ufw status` says inactive, allow SSH **first**:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+```
+
+**8. Backups.** Add the Podman cron line from [Backups](#backups) with `crontab -e`, and run it once by hand to check that it prints `backup ok`.
+
+**Updating.** Every push to `main` publishes a new image. To deploy it:
+
+```bash
+cd ~/wedding-planner && git pull          # picks up changes to the deploy scripts, if any
+./deploy/podman/update.sh                 # backup → pull → restart; migrations run on start
+```
+
+`run.sh` also labels the container for `podman auto-update`. If you'd rather update automatically, `systemctl --user enable --now podman-auto-update.timer` pulls and restarts daily. The trade-off is that you no longer choose when updates happen, and no backup is taken first.
+
+**Day-to-day commands:**
+
+```bash
+systemctl --user status container-wedding
+journalctl --user -u container-wedding -f      # or: podman logs -f wedding
+systemctl --user restart container-wedding
+podman exec -it wedding sh                      # a shell inside the container
+```
+
+**Troubleshooting:**
+
+| Problem | Fix |
+| --- | --- |
+| `Failed to connect to bus` / `XDG_RUNTIME_DIR` errors | You switched user with `su`. Log in over SSH as that user instead |
+| 502 from Nginx | The container is down: check `systemctl --user status container-wedding` and the journal |
+| Login works but you are logged out immediately | You opened it over `http://`. The cookie is `Secure`, so use `https://` |
+| `Invalid environment configuration` in the logs | `SESSION_SECRET` in `~/wedding/.env` is missing or shorter than 32 characters |
+| Doesn't start after reboot | `loginctl show-user $USER -p Linger` must say `Linger=yes` |
+
+## Alternative: Node + PM2
+
+Use this instead of Podman if you'd rather run Node directly on the host.
 
 The paths below assume `/var/www/wedding.sanfarish.com`. If you use another path, update the Nginx file to match.
 
@@ -194,7 +318,7 @@ chmod 600 .env && chmod 700 server/data
 
 **2. Point DNS** for `wedding.sanfarish.com` (an A/AAAA record) at the VPS.
 
-**3. Get a TLS certificate and enable the site.** See [Nginx](#nginx).
+**3. Get a TLS certificate and enable the site.** See [Nginx (Node + PM2)](#nginx-node--pm2).
 
 **4. Start the app with PM2.** See [PM2](#pm2).
 
@@ -221,9 +345,9 @@ node server/dist/scripts/migrate.js
 pm2 reload wedding-planner
 ```
 
-## Nginx
+## Nginx (Node + PM2)
 
-The site config is in `deploy/nginx/wedding.sanfarish.com.conf`. It:
+For the Podman setup, use `deploy/nginx/wedding.sanfarish.com.podman.conf` as described above. The Node + PM2 site config is `deploy/nginx/wedding.sanfarish.com.conf`. It:
 
 - terminates HTTPS and redirects HTTP to HTTPS;
 - serves `client/dist`, falling back to `index.html` for client-side routes;
@@ -287,8 +411,11 @@ server/
   test/                 Vitest + supertest API tests
   data/                 wedding.db (gitignored)
 shared/src/index.ts     Types shared by client and server (types only, no runtime code)
-deploy/                 Nginx site and PM2 ecosystem file
-scripts/backup-db.sh    Cron backup with rotation and optional off-site sync
+Containerfile           Multi-stage container image (built by .github/workflows/container.yml)
+deploy/podman/          run.sh, update.sh and the .env template for rootless Podman
+deploy/nginx/           Nginx sites: *.podman.conf (proxy to the container) and the Node + PM2 variant
+deploy/ecosystem.config.cjs   PM2 process file (Node + PM2 alternative)
+scripts/backup-db.sh    Cron backup with rotation, optional off-site sync, and a container mode
 ```
 
 ### API overview
@@ -332,8 +459,8 @@ Cancelled expenses are excluded from all totals. Money is stored as whole curren
 [ ] Login cookie shows HttpOnly, Secure, SameSite=Lax in browser devtools
 [ ] Unauthenticated /api/tasks returns 401
 [ ] 6 wrong logins in a row return "Too many login attempts"
-[ ] pm2 startup + pm2 save done; app comes back after `sudo reboot`
-[ ] Migrations run: node server/dist/scripts/migrate.js says "up to date"
+[ ] App comes back after `sudo reboot` (Podman: Linger=yes + container-wedding enabled; PM2: pm2 startup + pm2 save)
+[ ] Migrations applied (Podman: automatic on start; PM2: node server/dist/scripts/migrate.js says "up to date")
 [ ] Backup cron runs; a backup restores successfully; off-site copy exists
 [ ] Tried on a phone: navigation, adding a task/expense/guest, delete confirmations
 ```
