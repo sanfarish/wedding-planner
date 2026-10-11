@@ -3,7 +3,7 @@
 # daily/weekly/monthly copies, and optionally syncs them to remote storage.
 #
 # Usage (from cron):
-#   Node/PM2 install:  /var/www/wedding.sanfarish.com/scripts/backup-db.sh
+#   Node/PM2 install:  /var/www/wedding-plan.sanfarish.com/scripts/backup-db.sh
 #   Podman container:  CONTAINER=wedding DATA_DIR=$HOME/wedding/data BACKUP_DIR=$HOME/wedding/backups #                        ~/wedding-planner/scripts/backup-db.sh
 #
 # Environment:

@@ -54,8 +54,8 @@ Two versions are deliberately pinned in the root `package.json` `overrides`:
 ## Installation
 
 ```bash
-git clone <repo> wedding.sanfarish.com
-cd wedding.sanfarish.com
+git clone <repo> wedding-plan.sanfarish.com
+cd wedding-plan.sanfarish.com
 npm install
 cp .env.example .env      # then edit it, see below
 npm run db:migrate
@@ -167,7 +167,7 @@ sudo apt install rclone && rclone config
 
 # Daily at 02:30
 crontab -e
-30 2 * * * RCLONE_REMOTE="gdrive:wedding-backups" /var/www/wedding.sanfarish.com/scripts/backup-db.sh >> /var/log/wedding-backup.log 2>&1
+30 2 * * * RCLONE_REMOTE="gdrive:wedding-backups" /var/www/wedding-plan.sanfarish.com/scripts/backup-db.sh >> /var/log/wedding-backup.log 2>&1
 ```
 
 For a one-off backup: `node server/dist/scripts/backup.js [output-file]`.
@@ -215,7 +215,7 @@ Browser ──HTTPS──► Nginx (host) ──► 127.0.0.1:3000 ──► con
 
 To keep it private instead, run `podman login ghcr.io` on the VPS with a personal access token that has `read:packages`.
 
-**2. Point DNS.** Add an A record `wedding` → your VPS IP, and check it with `dig +short wedding.sanfarish.com`.
+**2. Point DNS.** Add an A record `wedding-plan` → your VPS IP, and check it with `dig +short wedding-plan.sanfarish.com`.
 
 **3. Prepare the VPS.** Log in over SSH as your user, not via `su`/`sudo -i`, because rootless systemd needs a real login session.
 
@@ -250,13 +250,13 @@ podman exec -it wedding node server/dist/scripts/create-user.js    # your partne
 **6. HTTPS and Nginx.** The container serves the Vue app and the API, so Nginx only proxies:
 
 ```bash
-sudo certbot certonly --nginx -d wedding.sanfarish.com
-sudo cp ~/wedding-planner/deploy/nginx/wedding.sanfarish.com.podman.conf /etc/nginx/sites-available/wedding.sanfarish.com.conf
-sudo ln -s /etc/nginx/sites-available/wedding.sanfarish.com.conf /etc/nginx/sites-enabled/
+sudo certbot certonly --nginx -d wedding-plan.sanfarish.com
+sudo cp ~/wedding-planner/deploy/nginx/wedding-plan.sanfarish.com.podman.conf /etc/nginx/sites-available/wedding-plan.sanfarish.com.conf
+sudo ln -s /etc/nginx/sites-available/wedding-plan.sanfarish.com.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-If you used another `HOST_PORT`, change `proxy_pass` to match. Then open **https://wedding.sanfarish.com**.
+If you used another `HOST_PORT`, change `proxy_pass` to match. Then open **https://wedding-plan.sanfarish.com**.
 
 **7. Firewall.** If `sudo ufw status` says inactive, allow SSH **first**:
 
@@ -300,14 +300,14 @@ podman exec -it wedding sh                      # a shell inside the container
 
 Use this instead of Podman if you'd rather run Node directly on the host.
 
-The paths below assume `/var/www/wedding.sanfarish.com`. If you use another path, update the Nginx file to match.
+The paths below assume `/var/www/wedding-plan.sanfarish.com`. If you use another path, update the Nginx file to match.
 
 **1. Get the code and build it on the VPS.** Never copy `node_modules` from Windows, because the native modules differ per OS.
 
 ```bash
-sudo mkdir -p /var/www/wedding.sanfarish.com && sudo chown "$USER" /var/www/wedding.sanfarish.com
-git clone <repo> /var/www/wedding.sanfarish.com
-cd /var/www/wedding.sanfarish.com
+sudo mkdir -p /var/www/wedding-plan.sanfarish.com && sudo chown "$USER" /var/www/wedding-plan.sanfarish.com
+git clone <repo> /var/www/wedding-plan.sanfarish.com
+cd /var/www/wedding-plan.sanfarish.com
 npm ci
 cp .env.example .env && nano .env    # NODE_ENV=production, a real SESSION_SECRET, PORT
 npm run build
@@ -316,7 +316,7 @@ node server/dist/scripts/create-user.js   # twice
 chmod 600 .env && chmod 700 server/data
 ```
 
-**2. Point DNS** for `wedding.sanfarish.com` (an A/AAAA record) at the VPS.
+**2. Point DNS** for `wedding-plan.sanfarish.com` (an A/AAAA record) at the VPS.
 
 **3. Get a TLS certificate and enable the site.** See [Nginx (Node + PM2)](#nginx-node--pm2).
 
@@ -336,7 +336,7 @@ sudo ufw status
 **Updating to a new version:**
 
 ```bash
-cd /var/www/wedding.sanfarish.com
+cd /var/www/wedding-plan.sanfarish.com
 ./scripts/backup-db.sh             # safety copy first
 git pull
 npm ci
@@ -347,7 +347,7 @@ pm2 reload wedding-planner
 
 ## Nginx (Node + PM2)
 
-For the Podman setup, use `deploy/nginx/wedding.sanfarish.com.podman.conf` as described above. The Node + PM2 site config is `deploy/nginx/wedding.sanfarish.com.conf`. It:
+For the Podman setup, use `deploy/nginx/wedding-plan.sanfarish.com.podman.conf` as described above. The Node + PM2 site config is `deploy/nginx/wedding-plan.sanfarish.com.conf`. It:
 
 - terminates HTTPS and redirects HTTP to HTTPS;
 - serves `client/dist`, falling back to `index.html` for client-side routes;
@@ -361,10 +361,10 @@ Because the HTTPS server block references certificate files, get the certificate
 ```bash
 sudo apt install nginx certbot python3-certbot-nginx
 sudo mkdir -p /var/www/certbot
-sudo certbot certonly --nginx -d wedding.sanfarish.com    # or --webroot -w /var/www/certbot
+sudo certbot certonly --nginx -d wedding-plan.sanfarish.com    # or --webroot -w /var/www/certbot
 
-sudo cp deploy/nginx/wedding.sanfarish.com.conf /etc/nginx/sites-available/
-sudo ln -s /etc/nginx/sites-available/wedding.sanfarish.com.conf /etc/nginx/sites-enabled/
+sudo cp deploy/nginx/wedding-plan.sanfarish.com.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/wedding-plan.sanfarish.com.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
