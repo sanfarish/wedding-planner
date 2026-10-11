@@ -1,6 +1,6 @@
 import request from 'supertest'
 import type { User } from '@wedding/shared'
-import { createApp } from '../src/app.js'
+import { createApp, type AppOptions } from '../src/app.js'
 import { openDatabase, type DB } from '../src/db/connection.js'
 import { runMigrations } from '../src/db/migrate.js'
 import { createUser } from '../src/services/auth.js'
@@ -18,10 +18,10 @@ export interface TestContext {
 }
 
 /** Fresh in-memory database with migrations, two users, and a logged-in agent. */
-export async function setup(): Promise<TestContext> {
+export async function setup(options: AppOptions = {}): Promise<TestContext> {
   const db = openDatabase(':memory:')
   runMigrations(db)
-  const { app, sessionStore } = createApp(db)
+  const { app, sessionStore } = createApp(db, options)
 
   const alice = await createUser('alice', 'Alice', PASSWORDS.alice)
   const bob = await createUser('bob', 'Bob', PASSWORDS.bob)

@@ -5,8 +5,8 @@ import { runMigrations } from './db/migrate.js'
 
 const db = openDatabase(config.databasePath)
 
-// Production applies migrations explicitly with `npm run db:migrate`.
-if (!config.isProduction) {
+// Off by default in production (run `db:migrate` explicitly); the container image turns it on.
+if (config.migrateOnStart) {
   const applied = runMigrations(db)
   if (applied.length) console.log(`Applied migrations: ${applied.join(', ')}`)
 }

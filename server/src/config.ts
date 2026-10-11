@@ -10,6 +10,30 @@ dotenv.config({ path: path.resolve(SERVER_ROOT, '..', '.env'), quiet: true })
 
 const DEV_SECRET = 'dev-only-insecure-session-secret-change-me-please'
 
+/** "true"/"false"/"1"/"0" (any case) as a boolean; undefined when unset. */
+const envBool = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .refine((v) => ['true', 'false', '1', '0'].includes(v), 'Use true or false')
+  .transform((v) => v === 'true' || v === '1')
+  .optional()
+
+export type TrustProxy = boolean | number | string
+
+/**
+ * Express "trust proxy" setting. A number is a hop count (e.g. 1 = only Nginx),
+ * true/false are booleans, anything else (e.g. "loopback") is passed through.
+ */
+export function parseTrustProxy(value: string | undefined): TrustProxy {
+  if (value === undefined || value.trim() === '') return 'loopback'
+  const v = value.trim()
+  if (/^\d+$/.test(v)) return Number(v)
+  if (v.toLowerCase() === 'true') return true
+  if (v.toLowerCase() === 'false') return false
+  return v
+}
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -18,6 +42,12 @@ const envSchema = z
     DATABASE_PATH: z.string().default('./data/wedding.db'),
     UPLOAD_DIR: z.string().default('./uploads'),
     SESSION_SECRET: z.string().optional(),
+    // Serve the built Vue app from Express (used by the container image).
+    SERVE_CLIENT: envBool,
+    CLIENT_DIST: z.string().default('../client/dist'),
+    // Apply pending migrations at startup. Defaults to on except in production.
+    MIGRATE_ON_START: envBool,
+    TRUST_PROXY: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -53,6 +83,10 @@ export const config = {
   databasePath: resolveFromServer(env.DATABASE_PATH),
   uploadDir: resolveFromServer(env.UPLOAD_DIR),
   sessionSecret: env.SESSION_SECRET && !env.SESSION_SECRET.startsWith('replace-this') ? env.SESSION_SECRET : DEV_SECRET,
+  serveClient: env.SERVE_CLIENT ?? false,
+  clientDist: path.resolve(SERVER_ROOT, env.CLIENT_DIST),
+  migrateOnStart: env.MIGRATE_ON_START ?? env.NODE_ENV !== 'production',
+  trustProxy: parseTrustProxy(env.TRUST_PROXY),
 } as const
 
 export type AppConfig = typeof config
