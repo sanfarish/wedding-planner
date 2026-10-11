@@ -1,0 +1,22 @@
+# Keep the build context small and free of secrets and data.
+# (Read by Docker and by Podman/Buildah.)
+.git
+.github
+**/node_modules
+**/dist
+**/coverage
+**/*.log
+**/*.tsbuildinfo
+
+.env
+.env.*
+!.env.example
+**/*.db
+**/*.db-*
+**/*.db.gz
+server/data
+server/uploads
+
+deploy
+scripts
+*.md

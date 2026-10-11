@@ -29,9 +29,11 @@ async function main(): Promise<void> {
     source.close()
   }
 
-  // Sanity check: the copy must open and pass an integrity check.
-  const copy = new Database(target, { readonly: true })
+  // Make the copy a single self-contained file (it inherits WAL mode, which would
+  // leave -wal/-shm files next to it), then check that it is intact.
+  const copy = new Database(target)
   try {
+    copy.pragma('journal_mode = DELETE')
     const result = copy.pragma('integrity_check', { simple: true })
     if (result !== 'ok') throw new Error(`Backup integrity check failed: ${String(result)}`)
   } finally {
